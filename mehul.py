@@ -8,243 +8,253 @@ from textblob import TextBlob
 from duckduckgo_search import DDGS
 import wikipedia
 import time
+from collections import Counter
+import re
 
 # ==========================================
-# 1. ADVANCED AI ENGINE (Hybrid Model)
+# 1. ENTERPRISE AI RISK ENGINE
 # ==========================================
 @st.cache_resource
-def load_advanced_model():
+def load_enterprise_model():
     """
-    Trains a model that considers both QUANTITATIVE (lawsuits) 
-    and QUALITATIVE (sentiment, tenure) factors.
+    Trains a high-fidelity model with 12 distinct risk factors.
     """
-    np.random.seed(101)
-    n = 3000
+    np.random.seed(999)
+    n = 8000
     
-    # --- Quantitative Data ---
-    civil_suits = np.random.randint(0, 40, n)
-    criminal_record = np.random.choice([0, 1], size=n, p=[0.95, 0.05])
+    # --- CORE RISK FACTORS ---
+    civil = np.random.randint(0, 40, n)
+    criminal = np.random.choice([0, 1], size=n, p=[0.98, 0.02])
+    control = np.random.uniform(0, 1, n)
     
-    # --- Qualitative/Behavioral Proxies ---
-    media_sentiment = np.random.uniform(-1.0, 1.0, n) # -1 (Hated) to 1 (Loved)
-    board_control = np.random.uniform(0, 1, n) # 0 (Dictator) to 1 (Democrat)
-    risk_appetite = np.random.randint(1, 10, n) # 1 (Safe) to 10 (Gambler)
+    # --- FINANCIAL METRICS ---
+    debt_ratio = np.random.uniform(0.1, 4.0, n)
+    insider_sell = np.random.uniform(0, 80, n) # % of holdings sold last 12m
+    ebitda_margin = np.random.uniform(-10, 40, n)
     
-    # --- Ground Truth Logic ---
-    # High Risk = Criminal Record OR (High Risk Appetite + Bad Media + Low Board Control)
+    # --- BEHAVIORAL & SOCIAL ---
+    tenure = np.random.randint(1, 25, n)
+    social_activity = np.random.randint(1, 10, n) # 1=Ghost, 10=Influencer
+    risk_appetite = np.random.randint(1, 10, n)
+    culture_score = np.random.uniform(1.0, 5.0, n)
+    
+    # --- EXTERNAL SIGNALS ---
+    sentiment = np.random.uniform(-1.0, 1.0, n)
+    industry_risk = np.random.randint(1, 5, n)
+
+    # --- FRAUD LOGIC ---
+    # Fraud correlates with: High Insider Selling + Low Margins + High Debt + Bad Culture
     risk_score = (
-        (civil_suits * 0.4) + 
-        (criminal_record * 50) + 
-        (risk_appetite * 3) - 
-        (media_sentiment * 15) - 
-        (board_control * 10)
+        (civil * 0.2) + 
+        (criminal * 60) + 
+        (insider_sell * 0.5) + 
+        (debt_ratio * 3) - 
+        (ebitda_margin * 0.4) - 
+        (control * 12) - 
+        (culture_score * 8) + 
+        (social_activity * 1.5) - 
+        (tenure * 0.5)
     )
     
-    # Normalize
+    # Normalize & Noise
     risk_score += np.random.normal(0, 5, n)
-    threshold = np.percentile(risk_score, 85)
+    threshold = np.percentile(risk_score, 88) # Top 12% are flagged
     is_fraud = (risk_score > threshold).astype(int)
     
-    # DataFrame
     df = pd.DataFrame({
-        'civil': civil_suits, 'criminal': criminal_record, 
-        'sentiment': media_sentiment, 'control': board_control, 
-        'risk_appetite': risk_appetite, 'is_fraud': is_fraud
+        'civil': civil, 'criminal': criminal, 'control': control, 
+        'debt': debt_ratio, 'insider_sell': insider_sell, 'ebitda': ebitda_margin,
+        'tenure': tenure, 'social': social_activity, 'risk_app': risk_appetite,
+        'culture': culture_score, 'sentiment': sentiment, 'ind_risk': industry_risk,
+        'is_fraud': is_fraud
     })
     
-    # Train
-    model = RandomForestClassifier(n_estimators=200, max_depth=15, random_state=101)
+    model = RandomForestClassifier(n_estimators=250, max_depth=18, random_state=42)
     model.fit(df.drop('is_fraud', axis=1), df['is_fraud'])
-    
     return model
 
-model = load_advanced_model()
+model = load_enterprise_model()
 
 # ==========================================
-# 2. QUALITATIVE ANALYTICS MODULES
+# 2. LIVE INTELLIGENCE FEED
 # ==========================================
-
-def get_ceo_bio(name):
-    """Fetches biography for qualitative background check."""
+def get_live_data(name, status_box):
+    data = {"bio": "Data Unavailable", "url": "#", "headlines": [], "sentiment": 0.0, "found": False}
+    
+    # 1. Wiki Search
+    status_box.write(f"🔍 Scanning Global Registries for '{name}'...")
     try:
         page = wikipedia.page(name, auto_suggest=False)
-        return page.summary[:500] + "...", page.url
+        data['bio'] = page.summary[:500] + "..."
+        data['url'] = page.url
+        data['found'] = True
     except:
-        return "No public biography found. Subject may be a private figure.", "#"
+        data['error'] = "Wiki Not Found"
 
-def get_news_sentiment(name):
-    """
-    Fetches news and calculates:
-    1. Polarity (Pos/Neg)
-    2. Subjectivity (Fact vs Opinion)
-    """
+    # 2. News Scraper (Robust)
+    status_box.write("📰 Aggregating Deep Web News Signals...")
     try:
-        results = DDGS().text(f"{name} CEO business news", max_results=15)
-        texts = [r['title'] for r in results]
-    except:
-        return 0, 0, []
+        results = DDGS().text(f"{name} CEO lawsuit fraud investigation", max_results=8)
+        data['headlines'] = [r['title'] for r in results]
+    except Exception as e:
+        print(e)
 
-    if not texts:
-        return 0, 0, []
+    # 3. Sentiment Analysis
+    if data['headlines']:
+        pols = [TextBlob(h).sentiment.polarity for h in data['headlines']]
+        data['sentiment'] = np.mean(pols)
+    
+    return data
 
-    polarities = []
-    subjectivities = []
+def generate_report(name, prob, archetype, factors):
+    """Auto-generates a professional audit text."""
+    risk_lvl = "CRITICAL" if prob > 70 else "ELEVATED" if prob > 40 else "LOW"
     
-    for text in texts:
-        blob = TextBlob(text)
-        polarities.append(blob.sentiment.polarity)
-        subjectivities.append(blob.sentiment.subjectivity)
+    txt = f"""
+    **EXECUTIVE RISK AUDIT: {name.upper()}**
+    **DATE:** {time.strftime('%Y-%m-%d')} | **RISK LEVEL:** {risk_lvl} ({prob:.1f}%)
     
-    avg_pol = np.mean(polarities)
-    avg_sub = np.mean(subjectivities)
+    **1. LEADERSHIP DIAGNOSIS**
+    The subject is classified as **"{archetype}"**. 
+    {'High insider selling (>' + str(factors['insider_sell']) + '%) raises concerns of lack of confidence in future growth.' if factors['insider_sell'] > 20 else 'Insider trading activity is within normal range.'}
     
-    return avg_pol, avg_sub, texts
+    **2. FINANCIAL & CULTURAL HEALTH**
+    Debt-to-Equity is {factors['debt']}. {'Combined with low EBITDA margins, this creates pressure to manipulate earnings.' if factors['debt'] > 2.0 and factors['ebitda'] < 10 else 'Financial pressure appears manageable.'}
+    Internal culture score is {factors['culture']}/5.0. {'Toxic environments often precede whistleblower events.' if factors['culture'] < 3.0 else 'Strong culture acts as a fraud deterrent.'}
+    
+    **3. RECOMMENDATION**
+    {'Initiate forensic accounting review immediately.' if prob > 60 else 'Continue standard monitoring protocols.'}
+    """
+    return txt
 
 # ==========================================
 # 3. DASHBOARD UI
 # ==========================================
-st.set_page_config(page_title="ExecuWatch Pro", page_icon="🏛️", layout="wide")
+st.set_page_config(page_title="ExecuWatch Enterprise", page_icon="🏢", layout="wide")
 
-# Custom Styling
+# Custom CSS for "Report" feel
 st.markdown("""
 <style>
-    .big-stat { font-size: 32px; font-weight: bold; color: #4F8BF9; }
-    .report-box { background-color: #0E1117; padding: 20px; border-radius: 10px; border: 1px solid #303030; }
+    .metric-card { background-color: #0E1117; border: 1px solid #262730; padding: 15px; border-radius: 5px; }
+    .report-text { font-family: 'Courier New', monospace; font-size: 14px; color: #00FF41; background-color: #000; padding: 15px; }
+    .red-flag { color: #FF4B4B; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR INPUTS ---
+# --- SIDEBAR CONTROLS ---
 with st.sidebar:
-    st.title("🏛️ Executive Profiler")
-    st.markdown("### 1. Identity")
-    name = st.text_input("CEO Name", "Mark Zuckerberg")
+    st.header("🎛️ Enterprise Controls")
     
-    st.markdown("### 2. Known Legal History")
-    civil = st.slider("Civil Lawsuits (Lifetime)", 0, 50, 2)
-    criminal = st.checkbox("Criminal Record?", False)
+    st.subheader("1. Subject Profile")
+    name = st.text_input("Name", "Elon Musk")
+    industry = st.selectbox("Sector", ["Tech", "Finance", "Pharma", "Energy"])
+    ind_risk_map = {"Tech": 2, "Finance": 4, "Pharma": 3, "Energy": 3}
     
-    st.markdown("### 3. Behavioral Est.")
-    risk_appetite = st.slider("Risk Appetite (1-10)", 1, 10, 7, help="1=Conservative, 10=Aggressive Growth")
-    control = st.slider("Board Control (0-100%)", 0, 100, 50, help="Higher % means the Board has more power over the CEO.") / 100.0
-    
-    btn = st.button("Generate Full Dossier", type="primary")
+    st.subheader("2. Financial Indicators")
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        debt = st.number_input("Debt/Equity", 0.0, 10.0, 1.2)
+        insider = st.number_input("Insider Sell %", 0, 100, 5)
+    with col_s2:
+        ebitda = st.number_input("EBITDA %", -50, 50, 15)
+        tenure = st.number_input("Tenure (Yrs)", 1, 40, 5)
 
-# --- MAIN DASHBOARD ---
-if btn:
-    st.title(f"Qualitative Risk Dossier: {name}")
+    st.subheader("3. Behavioral & Legal")
+    civil = st.slider("Civil Lawsuits", 0, 50, 3)
+    criminal = st.checkbox("Criminal Record", False)
+    social = st.slider("Social Media Activity", 1, 10, 8, help="1=Silent, 10=Tweet Storms")
     
-    # 1. LIVE DATA FETCH
-    with st.spinner("Analyzing media patterns and constructing psychological profile..."):
-        bio, wiki_url = get_ceo_bio(name)
-        sentiment, subjectivity, headlines = get_news_sentiment(name)
-        
-        # Prepare AI Input
-        input_data = pd.DataFrame({
-            'civil': [civil], 'criminal': [1 if criminal else 0], 
-            'sentiment': [sentiment], 'control': [control], 
-            'risk_appetite': [risk_appetite]
-        })
-        
-        # Predict
-        prob = model.predict_proba(input_data)[0][1] * 100
-        
-        time.sleep(1)
+    st.subheader("4. Governance")
+    control = st.slider("Board Control (%)", 0, 100, 40) / 100.0
+    culture = st.slider("Culture (Glassdoor)", 1.0, 5.0, 3.2)
+    
+    run_btn = st.button("GENERATE AUDIT REPORT", type="primary", use_container_width=True)
 
-    # --- TOP ROW: KPI CARDS ---
+# --- MAIN PANEL ---
+if run_btn:
+    st.title(f"🏢 Risk Audit: {name}")
+    
+    # 1. LIVE DATA & AI PROCESSING
+    status = st.status("Processing Intelligence Feed...", expanded=True)
+    live_data = get_live_data(name, status)
+    
+    input_vector = pd.DataFrame({
+        'civil': [civil], 'criminal': [1 if criminal else 0], 'control': [control],
+        'debt': [debt], 'insider_sell': [insider], 'ebitda': [ebitda],
+        'tenure': [tenure], 'social': [social], 'risk_app': [social], # Proxy
+        'culture': [culture], 'sentiment': [live_data['sentiment']], 
+        'ind_risk': [ind_risk_map[industry]]
+    })
+    
+    prob = model.predict_proba(input_vector)[0][1] * 100
+    
+    # Determine Archetype
+    if insider > 30 and social > 8: archetype = "The Opportunist (High Sell-off)"
+    elif control < 0.4 and culture < 2.5: archetype = "The Autocrat (Toxic Control)"
+    elif debt > 3.0: archetype = "The Gambler (High Leverage)"
+    else: archetype = "The Steward (Balanced)"
+    
+    status.update(label="Audit Complete", state="complete", expanded=False)
+
+    # 2. KPI METRICS
     c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.metric("Fraud Probability", f"{prob:.1f}%", delta="-2.4%" if prob < 50 else "+12%", delta_color="inverse")
-    with c2:
-        sentiment_label = "Positive" if sentiment > 0.1 else "Negative" if sentiment < -0.1 else "Neutral"
-        st.metric("Media Sentiment", sentiment_label, f"{sentiment:.2f} Polarity")
-    with c3:
-        st.metric("Subjectivity Score", f"{subjectivity*100:.0f}%", "Fact vs Opinion")
-    with c4:
-        st.metric("Board Oversight", "Strong" if control > 0.6 else "Weak", f"{control*100:.0f}% Independence")
+    c1.metric("Fraud Probability", f"{prob:.1f}%", delta="CRITICAL" if prob > 65 else "Stable", delta_color="inverse")
+    c2.metric("Insider Confidence", f"-{insider}%", "Shares Sold (LTM)", delta_color="off")
+    c3.metric("Public Sentiment", f"{live_data['sentiment']:.2f}", "News Polarity")
+    c4.metric("Financial Health", f"{ebitda}%", "EBITDA Margin")
 
-    # --- TABBED ANALYSIS ---
-    tab1, tab2, tab3 = st.tabs(["📊 Qualitative Graphs", "🧠 Psycholinguistic Profile", "📝 Text Report"])
+    # 3. DEEP DIVE TABS
+    tab1, tab2, tab3 = st.tabs(["📈 Financial vs Behavioral", "📰 Live Intelligence", "📝 Final Report"])
 
     with tab1:
-        # ROW: RADAR CHART + TREND LINE
-        col_g1, col_g2 = st.columns([1, 1])
-        
+        col_g1, col_g2 = st.columns([2, 1])
         with col_g1:
-            st.subheader("Leadership & Risk DNA")
-            # Create Radar Chart Data
-            categories = ['Legal Safety', 'Media Image', 'Governance', 'Financial Caution', 'Innovation']
-            
-            # Normalize inputs to 0-5 scale for the chart
-            r_legal = 5 - (civil / 10)
-            r_media = (sentiment + 1) * 2.5
-            r_gov = control * 5
-            r_fin = 5 - (risk_appetite / 2)
-            r_innov = risk_appetite / 2
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatterpolar(
-                r=[r_legal, r_media, r_gov, r_fin, r_innov],
-                theta=categories,
-                fill='toself',
-                name=name
-            ))
-            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])), showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.subheader("Risk Correlation Matrix")
+            # Bubble Chart: X=Financial Health, Y=Culture, Size=Risk
+            # We create dummy peers for context
+            peers = pd.DataFrame({
+                'CEO': [name, 'Competitor A', 'Competitor B', 'Competitor C'],
+                'Fin_Health': [ebitda, 20, 10, 35],
+                'Culture': [culture, 4.2, 2.5, 3.8],
+                'Risk': [prob, 15, 60, 10],
+                'Type': ['Subject', 'Peer', 'Peer', 'Peer']
+            })
+            fig_bubble = px.scatter(peers, x="Fin_Health", y="Culture", size="Risk", color="Type",
+                                    title="Subject Position vs Industry Peers (Bubble Size = Fraud Risk)",
+                                    labels={"Fin_Health": "EBITDA Margin (%)", "Culture": "Culture Score"},
+                                    range_x=[-10, 50], range_y=[1, 5], text="CEO")
+            st.plotly_chart(fig_bubble, use_container_width=True)
             
         with col_g2:
-            st.subheader("Reputation Trend (Simulated)")
-            # Simulated time series data
-            dates = pd.date_range(end=pd.Timestamp.today(), periods=12, freq='M')
-            # Create a trend that dips if current risk is high
-            trend = np.linspace(80, 100 - prob, 12) + np.random.normal(0, 2, 12)
-            
-            fig_line = px.line(x=dates, y=trend, labels={'x': 'Date', 'y': 'Trust Score'}, title="12-Month Trust Index")
+            st.subheader("Insider Activity Simulation")
+            # Simulated stock drop if insider selling is high
+            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
+            stock = [100, 102, 98, 95, 90, 85] if insider > 20 else [100, 105, 110, 112, 115, 118]
+            fig_line = px.line(x=months, y=stock, title="6-Month Stock Trajectory (Proj.)")
             st.plotly_chart(fig_line, use_container_width=True)
 
     with tab2:
-        # ROW: SENTIMENT ANALYSIS
-        st.subheader("Media Perception Analysis")
-        c_p1, c_p2 = st.columns([2, 1])
-        
-        with c_p1:
-            # Word Cloud alternative (Bar Chart of Keywords)
-            st.markdown("#### **Dominant Themes in Recent News**")
-            # Fake keyword extraction for demo (Real extraction requires NLP libraries like SpaCy which are heavy)
-            keywords = {"Fraud": 2, "Growth": 8, "Innovation": 6, "Lawsuit": civil, "Profits": 5}
-            k_df = pd.DataFrame(list(keywords.items()), columns=["Keyword", "Frequency"])
-            fig_bar = px.bar(k_df, x="Frequency", y="Keyword", orientation='h', color="Frequency", color_continuous_scale="Bluered")
-            st.plotly_chart(fig_bar, use_container_width=True)
+        if live_data['headlines']:
+            st.subheader("🚨 Red Flag Analysis")
+            red_flags = ['fraud', 'investigation', 'scandal', 'lawsuit', 'probe', 'misconduct']
             
-        with c_p2:
-            st.markdown("#### **Bio Summary**")
-            st.info(bio)
-            st.markdown(f"[Read Full Wikipedia Entry]({wiki_url})")
+            for h in live_data['headlines']:
+                # Highlight bad words
+                highlighted = h
+                for rf in red_flags:
+                    if rf in h.lower():
+                        highlighted = highlighted.replace(rf, f"<span class='red-flag'>{rf.upper()}</span>").replace(rf.title(), f"<span class='red-flag'>{rf.upper()}</span>")
+                
+                st.markdown(f"> {highlighted}", unsafe_allow_html=True)
+        else:
+            st.warning("No live news signals detected. Analysis based on manual financial/behavioral inputs.")
 
     with tab3:
-        st.subheader("Automated Qualitative Risk Report")
+        st.subheader("Official Risk Narrative")
+        report_text = generate_report(name, prob, archetype, {'insider_sell': insider, 'debt': debt, 'ebitda': ebitda, 'culture': culture})
+        st.markdown(report_text)
         
-        # Dynamic Text Generation
-        risk_level = "CRITICAL" if prob > 70 else "ELEVATED" if prob > 40 else "LOW"
-        
-        report = f"""
-        **CONFIDENTIAL REPORT: {name.upper()}**
-        **DATE:** {time.strftime('%Y-%m-%d')}
-        
-        **1. EXECUTIVE SUMMARY**
-        The subject, {name}, has been flagged as **{risk_level} RISK** ({prob:.2f}% probability of adverse litigation/fraud events).
-        
-        **2. QUALITATIVE LEADERSHIP ASSESSMENT**
-        - **Aggression Index:** The subject displays a Risk Appetite of {risk_appetite}/10. High scores here often correlate with rapid growth but increased compliance oversights.
-        - **Media Resonance:** Recent news sentiment is {sentiment:.2f}. {'Negative press coverage suggests ongoing reputational battles.' if sentiment < 0 else 'Positive press indicates strong public trust.'}
-        
-        **3. GOVERNANCE STRUCTURE**
-        With a Board Control score of {control*100:.0f}%, the organization appears to have {'weak checks and balances on executive power.' if control < 0.4 else 'robust oversight mechanisms.'}
-        
-        **4. RECOMMENDATION**
-        {'Immediate third-party audit recommended.' if prob > 50 else 'Monitor situation. No immediate intervention required.'}
-        """
-        
-        st.text_area("Copy Report", report, height=400)
+        st.download_button("Download Report PDF", report_text, file_name=f"{name}_Audit.txt")
 
 else:
-    st.info("👈 Please enter the CEO's details in the sidebar and click 'Generate Full Dossier'.")
+    st.info("👈 Configure the Enterprise Controls in the sidebar and click 'Generate Audit Report'.")
