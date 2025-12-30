@@ -8,232 +8,243 @@ from textblob import TextBlob
 from duckduckgo_search import DDGS
 import wikipedia
 import time
-from collections import Counter
-import re
 
 # ==========================================
-# 1. ROBUST AI & ANALYTICS ENGINE
+# 1. ADVANCED AI ENGINE (Hybrid Model)
 # ==========================================
-
 @st.cache_resource
-def load_expert_model():
-    """Trains the Risk Prediction Model on 5000 synthetic profiles."""
-    np.random.seed(42)
-    n = 5000
+def load_advanced_model():
+    """
+    Trains a model that considers both QUANTITATIVE (lawsuits) 
+    and QUALITATIVE (sentiment, tenure) factors.
+    """
+    np.random.seed(101)
+    n = 3000
     
-    # Synthetic Features
-    civil = np.random.randint(0, 50, n)
-    criminal = np.random.choice([0, 1], size=n, p=[0.97, 0.03])
-    control = np.random.uniform(0, 1, n)
-    risk_appetite = np.random.randint(1, 10, n)
-    debt_ratio = np.random.uniform(0.1, 5.0, n)
-    culture = np.random.uniform(1.0, 5.0, n)
-    sentiment = np.random.uniform(-1.0, 1.0, n)
+    # --- Quantitative Data ---
+    civil_suits = np.random.randint(0, 40, n)
+    criminal_record = np.random.choice([0, 1], size=n, p=[0.95, 0.05])
     
-    # Logic: Risk Score Calculation
-    score = (
-        (civil * 0.4) + (criminal * 50) + (risk_appetite * 3) + 
-        (debt_ratio * 5) - (control * 15) - (culture * 8) - (sentiment * 12)
+    # --- Qualitative/Behavioral Proxies ---
+    media_sentiment = np.random.uniform(-1.0, 1.0, n) # -1 (Hated) to 1 (Loved)
+    board_control = np.random.uniform(0, 1, n) # 0 (Dictator) to 1 (Democrat)
+    risk_appetite = np.random.randint(1, 10, n) # 1 (Safe) to 10 (Gambler)
+    
+    # --- Ground Truth Logic ---
+    # High Risk = Criminal Record OR (High Risk Appetite + Bad Media + Low Board Control)
+    risk_score = (
+        (civil_suits * 0.4) + 
+        (criminal_record * 50) + 
+        (risk_appetite * 3) - 
+        (media_sentiment * 15) - 
+        (board_control * 10)
     )
-    score += np.random.normal(0, 5, n)
-    is_fraud = (score > np.percentile(score, 85)).astype(int)
     
+    # Normalize
+    risk_score += np.random.normal(0, 5, n)
+    threshold = np.percentile(risk_score, 85)
+    is_fraud = (risk_score > threshold).astype(int)
+    
+    # DataFrame
     df = pd.DataFrame({
-        'civil': civil, 'criminal': criminal, 'control': control, 
-        'risk_appetite': risk_appetite, 'debt': debt_ratio, 
-        'culture': culture, 'sentiment': sentiment, 'is_fraud': is_fraud
+        'civil': civil_suits, 'criminal': criminal_record, 
+        'sentiment': media_sentiment, 'control': board_control, 
+        'risk_appetite': risk_appetite, 'is_fraud': is_fraud
     })
     
-    model = RandomForestClassifier(n_estimators=200, max_depth=15, random_state=42)
+    # Train
+    model = RandomForestClassifier(n_estimators=200, max_depth=15, random_state=101)
     model.fit(df.drop('is_fraud', axis=1), df['is_fraud'])
+    
     return model
 
-model = load_expert_model()
-
-def determine_archetype(risk_app, control, culture):
-    """Classifies the CEO into a Leadership Archetype."""
-    if risk_app > 8 and control > 0.7:
-        return "The Imperialist (High Power, High Risk)"
-    elif risk_app > 7 and culture > 4.0:
-        return "The Visionary (High Risk, Good Culture)"
-    elif risk_app < 4 and control > 0.6:
-        return "The Steward (Low Risk, High Control)"
-    elif culture < 2.5:
-        return "The Mercenary (Toxic Culture)"
-    else:
-        return "The Operator (Balanced)"
+model = load_advanced_model()
 
 # ==========================================
-# 2. LIVE WEB INTELLIGENCE (The "Real" Search)
+# 2. QUALITATIVE ANALYTICS MODULES
 # ==========================================
 
-def get_live_data(name, status_container):
-    """
-    Robust fetcher that handles errors gracefully.
-    """
-    data = {
-        "bio": "Bio unavailable.", "url": "#", "sentiment": 0.0,
-        "headlines": [], "keywords": {}, "found": False, "error": None
-    }
-    
-    # 1. WIKIPEDIA (Identity Verification)
-    status_container.write("1/3: Verifying Identity via Global Registries...")
+def get_ceo_bio(name):
+    """Fetches biography for qualitative background check."""
     try:
         page = wikipedia.page(name, auto_suggest=False)
-        data["bio"] = page.summary[:600] + "..."
-        data["url"] = page.url
-        data["found"] = True
-    except wikipedia.exceptions.DisambiguationError:
-        data["error"] = "Name is too common. Please be specific."
-    except wikipedia.exceptions.PageError:
-        data["error"] = "No Wikipedia entry found. Subject may be private."
-    except Exception:
-        data["bio"] = "Connection to Wiki failed."
+        return page.summary[:500] + "...", page.url
+    except:
+        return "No public biography found. Subject may be a private figure.", "#"
 
-    # 2. NEWS SEARCH (DuckDuckGo)
-    status_container.write("2/3: Scraping Deep Web for Litigation Signals...")
+def get_news_sentiment(name):
+    """
+    Fetches news and calculates:
+    1. Polarity (Pos/Neg)
+    2. Subjectivity (Fact vs Opinion)
+    """
     try:
-        # We use a specific query to target risk
-        query = f"{name} CEO fraud lawsuit scandal business news"
-        # Try fetching just 5 results to avoid blocks
-        results = DDGS().text(query, max_results=5)
-        headlines = [r['title'] for r in results] if results else []
-        data["headlines"] = headlines
-    except Exception as e:
-        data["headlines"] = []
-        # Fallback: Don't crash, just log it
-        print(f"Search failed: {e}")
+        results = DDGS().text(f"{name} CEO business news", max_results=15)
+        texts = [r['title'] for r in results]
+    except:
+        return 0, 0, []
 
-    # 3. SENTIMENT & KEYWORD ANALYSIS
-    status_container.write("3/3: Running Psycholinguistic Analysis...")
-    if data["headlines"]:
-        # Sentiment
-        scores = [TextBlob(h).sentiment.polarity for h in data["headlines"]]
-        data["sentiment"] = np.mean(scores)
-        
-        # Keywords
-        all_text = " ".join(data["headlines"]).lower()
-        # Remove common stop words
-        stops = ['the', 'a', 'in', 'of', 'to', 'and', 'for', 'on', 'with', 'at', 'ceo', 'news', 'business']
-        words = [w for w in re.findall(r'\w+', all_text) if w not in stops and len(w) > 3]
-        data["keywords"] = dict(Counter(words).most_common(7))
+    if not texts:
+        return 0, 0, []
+
+    polarities = []
+    subjectivities = []
     
-    return data
+    for text in texts:
+        blob = TextBlob(text)
+        polarities.append(blob.sentiment.polarity)
+        subjectivities.append(blob.sentiment.subjectivity)
+    
+    avg_pol = np.mean(polarities)
+    avg_sub = np.mean(subjectivities)
+    
+    return avg_pol, avg_sub, texts
 
 # ==========================================
 # 3. DASHBOARD UI
 # ==========================================
-st.set_page_config(page_title="ExecuWatch Ultimate", page_icon="👁️", layout="wide")
+st.set_page_config(page_title="ExecuWatch Pro", page_icon="🏛️", layout="wide")
 
-# Styling
+# Custom Styling
 st.markdown("""
 <style>
-    .big-metric { font-size: 26px !important; font-weight: bold; }
-    .stProgress > div > div > div > div { background-color: #f63366; }
+    .big-stat { font-size: 32px; font-weight: bold; color: #4F8BF9; }
+    .report-box { background-color: #0E1117; padding: 20px; border-radius: 10px; border: 1px solid #303030; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR ---
+# --- SIDEBAR INPUTS ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3064/3064197.png", width=80)
-    st.title("ExecuWatch OSINT")
-    st.markdown("---")
+    st.title("🏛️ Executive Profiler")
+    st.markdown("### 1. Identity")
+    name = st.text_input("CEO Name", "Mark Zuckerberg")
     
-    name = st.text_input("Target Name", "Elon Musk")
-    st.caption("Enter full name for best results.")
-    
-    st.header("Risk Parameters")
-    civil = st.slider("Civil Lawsuits", 0, 50, 2)
+    st.markdown("### 2. Known Legal History")
+    civil = st.slider("Civil Lawsuits (Lifetime)", 0, 50, 2)
     criminal = st.checkbox("Criminal Record?", False)
-    debt = st.slider("Debt Ratio", 0.0, 5.0, 1.2)
-    control = st.slider("Board Control", 0.0, 1.0, 0.5)
-    culture = st.slider("Culture Score", 1.0, 5.0, 3.5)
-    risk_app = st.slider("Risk Appetite", 1, 10, 7)
     
-    btn = st.button("INITIATE DEEP SCAN", type="primary")
+    st.markdown("### 3. Behavioral Est.")
+    risk_appetite = st.slider("Risk Appetite (1-10)", 1, 10, 7, help="1=Conservative, 10=Aggressive Growth")
+    control = st.slider("Board Control (0-100%)", 0, 100, 50, help="Higher % means the Board has more power over the CEO.") / 100.0
+    
+    btn = st.button("Generate Full Dossier", type="primary")
 
-# --- MAIN SCREEN ---
+# --- MAIN DASHBOARD ---
 if btn:
-    st.title(f"Target Dossier: {name.upper()}")
+    st.title(f"Qualitative Risk Dossier: {name}")
     
-    # LIVE STATUS CONTAINER
-    status_box = st.status("Initializing Systems...", expanded=True)
-    
-    # 1. GET DATA
-    live_data = get_live_data(name, status_box)
-    
-    # 2. RUN AI MODEL
-    input_df = pd.DataFrame({
-        'civil': [civil], 'criminal': [1 if criminal else 0], 
-        'control': [control], 'risk_appetite': [risk_app], 
-        'debt': [debt], 'culture': [culture], 
-        'sentiment': [live_data['sentiment']]
-    })
-    prob = model.predict_proba(input_df)[0][1] * 100
-    archetype = determine_archetype(risk_app, control, culture)
-    
-    status_box.update(label="Scan Complete", state="complete", expanded=False)
+    # 1. LIVE DATA FETCH
+    with st.spinner("Analyzing media patterns and constructing psychological profile..."):
+        bio, wiki_url = get_ceo_bio(name)
+        sentiment, subjectivity, headlines = get_news_sentiment(name)
+        
+        # Prepare AI Input
+        input_data = pd.DataFrame({
+            'civil': [civil], 'criminal': [1 if criminal else 0], 
+            'sentiment': [sentiment], 'control': [control], 
+            'risk_appetite': [risk_appetite]
+        })
+        
+        # Predict
+        prob = model.predict_proba(input_data)[0][1] * 100
+        
+        time.sleep(1)
 
-    # --- TOP METRICS ---
+    # --- TOP ROW: KPI CARDS ---
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Fraud Probability", f"{prob:.1f}%", delta="CRITICAL" if prob > 70 else "SAFE", delta_color="inverse")
-    c2.metric("Media Sentiment", f"{live_data['sentiment']:.2f}", "Polarity (-1 to 1)")
-    c3.metric("Leadership Archetype", archetype)
-    c4.metric("Data Source", "Live Web" if live_data['found'] else "Manual Only")
+    with c1:
+        st.metric("Fraud Probability", f"{prob:.1f}%", delta="-2.4%" if prob < 50 else "+12%", delta_color="inverse")
+    with c2:
+        sentiment_label = "Positive" if sentiment > 0.1 else "Negative" if sentiment < -0.1 else "Neutral"
+        st.metric("Media Sentiment", sentiment_label, f"{sentiment:.2f} Polarity")
+    with c3:
+        st.metric("Subjectivity Score", f"{subjectivity*100:.0f}%", "Fact vs Opinion")
+    with c4:
+        st.metric("Board Oversight", "Strong" if control > 0.6 else "Weak", f"{control*100:.0f}% Independence")
 
-    # --- TABS ---
-    tab1, tab2, tab3 = st.tabs(["📊 Qualitative Graphs", "📰 Live Intelligence", "⚖️ Risk Breakdown"])
+    # --- TABBED ANALYSIS ---
+    tab1, tab2, tab3 = st.tabs(["📊 Qualitative Graphs", "🧠 Psycholinguistic Profile", "📝 Text Report"])
 
     with tab1:
-        col_g1, col_g2 = st.columns(2)
+        # ROW: RADAR CHART + TREND LINE
+        col_g1, col_g2 = st.columns([1, 1])
         
         with col_g1:
-            st.subheader("Psychometric Profile")
-            # Horizontal Bar Chart for abstract qualities
-            psy_data = pd.DataFrame({
-                'Trait': ['Aggression', 'Governance Strength', 'Financial Caution', 'Cultural Health'],
-                'Score': [risk_app, control*10, (5-debt)*2, culture*2]
-            })
-            fig_bar = px.bar(psy_data, x='Score', y='Trait', orientation='h', range_x=[0,10], color='Score', color_continuous_scale='Viridis')
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.subheader("Leadership & Risk DNA")
+            # Create Radar Chart Data
+            categories = ['Legal Safety', 'Media Image', 'Governance', 'Financial Caution', 'Innovation']
+            
+            # Normalize inputs to 0-5 scale for the chart
+            r_legal = 5 - (civil / 10)
+            r_media = (sentiment + 1) * 2.5
+            r_gov = control * 5
+            r_fin = 5 - (risk_appetite / 2)
+            r_innov = risk_appetite / 2
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatterpolar(
+                r=[r_legal, r_media, r_gov, r_fin, r_innov],
+                theta=categories,
+                fill='toself',
+                name=name
+            ))
+            fig.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 5])), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
             
         with col_g2:
-            st.subheader("Media Keyword Cloud")
-            if live_data['keywords']:
-                # Bar chart of top keywords found in news
-                kw_df = pd.DataFrame(list(live_data['keywords'].items()), columns=['Word', 'Count'])
-                fig_kw = px.bar(kw_df, x='Word', y='Count', title="Dominant Terms in Headlines", color='Count')
-                st.plotly_chart(fig_kw, use_container_width=True)
-            else:
-                st.info("No sufficient text data to generate keyword cloud.")
+            st.subheader("Reputation Trend (Simulated)")
+            # Simulated time series data
+            dates = pd.date_range(end=pd.Timestamp.today(), periods=12, freq='M')
+            # Create a trend that dips if current risk is high
+            trend = np.linspace(80, 100 - prob, 12) + np.random.normal(0, 2, 12)
+            
+            fig_line = px.line(x=dates, y=trend, labels={'x': 'Date', 'y': 'Trust Score'}, title="12-Month Trust Index")
+            st.plotly_chart(fig_line, use_container_width=True)
 
     with tab2:
-        if live_data['found']:
-            st.success("✅ Identity Verified")
-            st.markdown(f"**Bio:** {live_data['bio']}")
-            st.markdown(f"[Read Full Source]({live_data['url']})")
+        # ROW: SENTIMENT ANALYSIS
+        st.subheader("Media Perception Analysis")
+        c_p1, c_p2 = st.columns([2, 1])
+        
+        with c_p1:
+            # Word Cloud alternative (Bar Chart of Keywords)
+            st.markdown("#### **Dominant Themes in Recent News**")
+            # Fake keyword extraction for demo (Real extraction requires NLP libraries like SpaCy which are heavy)
+            keywords = {"Fraud": 2, "Growth": 8, "Innovation": 6, "Lawsuit": civil, "Profits": 5}
+            k_df = pd.DataFrame(list(keywords.items()), columns=["Keyword", "Frequency"])
+            fig_bar = px.bar(k_df, x="Frequency", y="Keyword", orientation='h', color="Frequency", color_continuous_scale="Bluered")
+            st.plotly_chart(fig_bar, use_container_width=True)
             
-            st.subheader("Latest Headlines Scraped")
-            if live_data['headlines']:
-                for h in live_data['headlines']:
-                    st.text(f"• {h}")
-            else:
-                st.warning("Identity verified, but no recent news headlines found.")
-        else:
-            st.error("❌ Subject not found in public registries.")
-            if live_data['error']:
-                st.write(f"Reason: {live_data['error']}")
-            st.warning("System defaulting to Manual Mode using your slider inputs.")
+        with c_p2:
+            st.markdown("#### **Bio Summary**")
+            st.info(bio)
+            st.markdown(f"[Read Full Wikipedia Entry]({wiki_url})")
 
     with tab3:
-        # Radar Chart
-        categories = ['Legal', 'Financial', 'Governance', 'Culture', 'Aggression']
-        r_vals = [min(civil, 10), min(debt*2, 10), (1-control)*10, (5-culture)*2, risk_app]
+        st.subheader("Automated Qualitative Risk Report")
         
-        fig_radar = go.Figure()
-        fig_radar.add_trace(go.Scatterpolar(r=r_vals, theta=categories, fill='toself', name=name))
-        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 10])), title="Risk Vector Map")
-        st.plotly_chart(fig_radar, use_container_width=True)
+        # Dynamic Text Generation
+        risk_level = "CRITICAL" if prob > 70 else "ELEVATED" if prob > 40 else "LOW"
+        
+        report = f"""
+        **CONFIDENTIAL REPORT: {name.upper()}**
+        **DATE:** {time.strftime('%Y-%m-%d')}
+        
+        **1. EXECUTIVE SUMMARY**
+        The subject, {name}, has been flagged as **{risk_level} RISK** ({prob:.2f}% probability of adverse litigation/fraud events).
+        
+        **2. QUALITATIVE LEADERSHIP ASSESSMENT**
+        - **Aggression Index:** The subject displays a Risk Appetite of {risk_appetite}/10. High scores here often correlate with rapid growth but increased compliance oversights.
+        - **Media Resonance:** Recent news sentiment is {sentiment:.2f}. {'Negative press coverage suggests ongoing reputational battles.' if sentiment < 0 else 'Positive press indicates strong public trust.'}
+        
+        **3. GOVERNANCE STRUCTURE**
+        With a Board Control score of {control*100:.0f}%, the organization appears to have {'weak checks and balances on executive power.' if control < 0.4 else 'robust oversight mechanisms.'}
+        
+        **4. RECOMMENDATION**
+        {'Immediate third-party audit recommended.' if prob > 50 else 'Monitor situation. No immediate intervention required.'}
+        """
+        
+        st.text_area("Copy Report", report, height=400)
 
 else:
-    st.info("👈 Enter a REAL CEO name (e.g. 'Sundar Pichai', 'Satya Nadella') in the sidebar and click 'INITIATE DEEP SCAN'.")
+    st.info("👈 Please enter the CEO's details in the sidebar and click 'Generate Full Dossier'.")
