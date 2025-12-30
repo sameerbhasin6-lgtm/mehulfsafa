@@ -3,3 +3,7 @@ pandas
 plotly
 scikit-learn
 openpyxl
+numpy
+textblob
+duckduckgo-search
+wikipedia
